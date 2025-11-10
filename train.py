@@ -23,9 +23,11 @@ def parse_args():
     parser.add_argument('--epoch', type=int, default=100, help="number of epochs")
     parser.add_argument('--mb', type=int, default=4096, help="mini-batch size")
     parser.add_argument('--ss_t', type=float, default=1e-5, help="subsample threshold")
+    parser.add_argument('--lr', type=float, default=0.001, help="learning rate")
     parser.add_argument('--conti', action='store_true', help="continue learning")
     parser.add_argument('--weights', action='store_true', help="use weights for negative sampling")
     parser.add_argument('--cuda', action='store_true', help="use CUDA")
+    parser.add_argument('--torus', action='store_true', default=False, help="train toric embeddings")
     return parser.parse_args()
 
 
@@ -60,29 +62,49 @@ def train(args):
     weights = wf if args.weights else None
     if not os.path.isdir(args.save_dir):
         os.mkdir(args.save_dir)
-    model = Word2Vec(vocab_size=vocab_size, embedding_size=args.e_dim)
+    model = Word2Vec(vocab_size=vocab_size, embedding_size=args.e_dim, torus=args.torus)
     modelpath = os.path.join(args.save_dir, '{}.pt'.format(args.name))
-    sgns = SGNS(embedding=model, vocab_size=vocab_size, n_negs=args.n_negs, weights=weights)
+    sgns = SGNS(embedding=model, vocab_size=vocab_size, n_negs=args.n_negs, weights=weights, torus=args.torus)
     if os.path.isfile(modelpath) and args.conti:
         sgns.load_state_dict(t.load(modelpath))
     if args.cuda:
         sgns = sgns.cuda()
-    optim = Adam(sgns.parameters())
+    optim = Adam(sgns.parameters(), lr=args.lr)
     optimpath = os.path.join(args.save_dir, '{}.optim.pt'.format(args.name))
     if os.path.isfile(optimpath) and args.conti:
         optim.load_state_dict(t.load(optimpath))
+    
+    best_loss = float('inf')
+    
     for epoch in range(1, args.epoch + 1):
         dataset = PermutedSubsampledCorpus(os.path.join(args.data_dir, 'train.dat'))
         dataloader = DataLoader(dataset, batch_size=args.mb, shuffle=True)
-        total_batches = int(np.ceil(len(dataset) / args.mb))
+        
+        epoch_losses = []
         pbar = tqdm(dataloader)
         pbar.set_description("[Epoch {}]".format(epoch))
+        
         for iword, owords in pbar:
             loss = sgns(iword, owords)
             optim.zero_grad()
             loss.backward()
             optim.step()
-            pbar.set_postfix(loss=loss.item())
+            
+            loss_val = loss.item()
+            epoch_losses.append(loss_val)
+            
+            # Check for NaN or Inf (bug detection)
+            if not np.isfinite(loss_val):
+                print(f"\nWARNING: Non-finite loss detected at epoch {epoch}: {loss_val}")
+                break
+            
+            pbar.set_postfix(loss=loss_val)
+        
+        # Log at end of epoch
+        epoch_avg_loss = np.mean(epoch_losses)
+        if epoch_avg_loss < best_loss:
+            best_loss = epoch_avg_loss
+        print(f"[Epoch {epoch}/{args.epoch}] Average Loss: {epoch_avg_loss:.4f}, Best Loss: {best_loss:.4f}")
     idx2vec = model.ivectors.weight.data.cpu().numpy()
     pickle.dump(idx2vec, open(os.path.join(args.data_dir, 'idx2vec.dat'), 'wb'))
     t.save(sgns.state_dict(), os.path.join(args.save_dir, '{}.pt'.format(args.name)))
