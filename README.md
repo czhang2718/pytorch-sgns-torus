@@ -1,6 +1,6 @@
 # PyTorch SGNS
 
-Word2Vec's **SkipGramNegativeSampling** in Python.
+Word2Vec's **SkipGramNegativeSampling** in Python, modified to support toric embeddings.
 
 Yet another but quite general [negative sampling loss](https://arxiv.org/abs/1310.4546) implemented in [PyTorch](http://www.pytorch.org).
 

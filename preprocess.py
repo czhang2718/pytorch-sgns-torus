@@ -23,6 +23,9 @@ class Preprocess(object):
         self.window = window
         self.unk = unk
         self.data_dir = data_dir
+        # Create data directory if it doesn't exist
+        if not os.path.isdir(self.data_dir):
+            os.makedirs(self.data_dir)
 
     def skipgram(self, sentence, i):
         iword = sentence[i]
