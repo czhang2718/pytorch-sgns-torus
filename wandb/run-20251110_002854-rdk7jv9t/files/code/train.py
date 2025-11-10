@@ -91,7 +91,7 @@ def train(args):
         wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
-            name=args.wandb_name,
+            name=args.name,
             config={
                 'vocab_size': vocab_size,
                 'embedding_dim': args.e_dim,

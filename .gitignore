@@ -106,3 +106,9 @@ ENV/
 data/
 result/
 .DS_Store
+
+
+# Claire: saved data
+./data
+./pts
+./wandb

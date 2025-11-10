@@ -36,7 +36,6 @@ def parse_args():
     parser.add_argument('--cuda', action='store_true', help="use CUDA")
     parser.add_argument('--torus', action='store_true', default=False, help="train toric embeddings")
     parser.add_argument('--wandb', action='store_true', help="log to Weights & Biases")
-    parser.add_argument('--wandb_name', type=str, default='pytorch-sgns-torus', help="wandb run name")
     parser.add_argument('--wandb_project', type=str, default='pytorch-sgns-torus', help="wandb project name")
     parser.add_argument('--wandb_entity', type=str, default=None, help="wandb entity/team name")
     parser.add_argument('--wandb_log_interval', type=int, default=1, help="log to wandb every N batches")
@@ -91,7 +90,7 @@ def train(args):
         wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
-            name=args.wandb_name,
+            name=args.name,
             config={
                 'vocab_size': vocab_size,
                 'embedding_dim': args.e_dim,
