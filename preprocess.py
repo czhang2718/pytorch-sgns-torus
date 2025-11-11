@@ -9,8 +9,8 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='./data/', help="data directory path")
-    parser.add_argument('--vocab', type=str, default='./data/corpus.txt', help="corpus path for building vocab")
-    parser.add_argument('--corpus', type=str, default='./data/corpus.txt', help="corpus path")
+    parser.add_argument('--vocab', type=str, default='/cache/openwebtext/val.txt', help="corpus path for building vocab")
+    parser.add_argument('--corpus', type=str, default='/cache/openwebtext/val.txt', help="corpus path")
     parser.add_argument('--unk', type=str, default='<UNK>', help="UNK token")
     parser.add_argument('--window', type=int, default=5, help="window size")
     parser.add_argument('--max_vocab', type=int, default=20000, help="maximum number of vocab")
@@ -81,7 +81,7 @@ class Preprocess(object):
                     data.append((self.word2idx[iword], [self.word2idx[oword] for oword in owords]))
         print("")
         pickle.dump(data, open(os.path.join(self.data_dir, 'train.dat'), 'wb'))
-        print("conversion done")
+        print(f"conversion done: {len(data):,} skip-gram pairs created")
 
 
 if __name__ == '__main__':
