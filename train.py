@@ -73,7 +73,7 @@ def train(args):
     vocab_size = len(idx2word)
     weights = wf if args.weights else None
     if not os.path.isdir(args.save_dir):
-        os.mkdir(args.save_dir)
+        os.makedirs(args.save_dir, exist_ok=True)
     model = Word2Vec(vocab_size=vocab_size, embedding_size=args.e_dim, torus=args.torus)
     modelpath = os.path.join(args.save_dir, '{}.pt'.format(args.name))
     sgns = SGNS(embedding=model, vocab_size=vocab_size, n_negs=args.n_negs, weights=weights, torus=args.torus)
@@ -88,22 +88,25 @@ def train(args):
     
     # Initialize wandb
     if args.wandb and WANDB_AVAILABLE:
+        config = {
+            'vocab_size': vocab_size,
+            'embedding_dim': args.e_dim,
+            'n_negs': args.n_negs,
+            'epochs': args.epoch,
+            'batch_size': args.mb,
+            'learning_rate': args.lr,
+            'subsample_threshold': args.ss_t,
+            'use_weights': args.weights,
+            'torus': args.torus,
+            'cuda': args.cuda,
+        }
+        if args.torus and hasattr(sgns, 'torus_scale_factor'):
+            config['torus_scale_factor'] = sgns.torus_scale_factor.item()
         wandb.init(
             project=args.wandb_project,
             entity=args.wandb_entity,
             name=args.wandb_name,
-            config={
-                'vocab_size': vocab_size,
-                'embedding_dim': args.e_dim,
-                'n_negs': args.n_negs,
-                'epochs': args.epoch,
-                'batch_size': args.mb,
-                'learning_rate': args.lr,
-                'subsample_threshold': args.ss_t,
-                'use_weights': args.weights,
-                'torus': args.torus,
-                'cuda': args.cuda,
-            }
+            config=config
         )
     
     best_loss = float('inf')
@@ -142,7 +145,10 @@ def train(args):
             
             # Log to wandb at specified intervals
             if args.wandb and WANDB_AVAILABLE and (batch_idx % args.wandb_log_interval == 0):
-                wandb.log({'loss': loss_val, 'epoch': epoch}, step=tokens_seen)
+                log_dict = {'loss': loss_val, 'epoch': epoch}
+                if args.torus and hasattr(sgns, 'torus_scale_factor'):
+                    log_dict['torus_scale_factor'] = sgns.torus_scale_factor.item()
+                wandb.log(log_dict, step=tokens_seen)
         
         # Log at end of epoch
         epoch_avg_loss = np.mean(epoch_losses)
@@ -152,9 +158,12 @@ def train(args):
         
         # Log epoch average to wandb
         if args.wandb and WANDB_AVAILABLE:
-            wandb.log({'loss': epoch_avg_loss, 'epoch': epoch}, step=tokens_seen)
+            log_dict = {'loss': epoch_avg_loss, 'epoch': epoch}
+            if args.torus and hasattr(sgns, 'torus_scale_factor'):
+                log_dict['torus_scale_factor'] = sgns.torus_scale_factor.item()
+            wandb.log(log_dict, step=tokens_seen)
     idx2vec = model.ivectors.weight.data.cpu().numpy()
-    pickle.dump(idx2vec, open(os.path.join(args.data_dir, 'idx2vec.dat'), 'wb'))
+    pickle.dump(idx2vec, open(os.path.join(args.save_dir, 'idx2vec.dat'), 'wb'))
     t.save(sgns.state_dict(), os.path.join(args.save_dir, '{}.pt'.format(args.name)))
     t.save(optim.state_dict(), os.path.join(args.save_dir, '{}.optim.pt'.format(args.name)))
     
