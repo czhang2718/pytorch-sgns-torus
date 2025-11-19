@@ -33,25 +33,33 @@ def convert_bin_to_text(input_bin, output_txt, tokenizer_name='gpt2', max_lines=
     tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_name)
     
     print(f"Reading binary file: {input_bin}")
-    # Read binary file as uint16 array
-    tokens = np.fromfile(input_bin, dtype=np.uint16)
-    
-    print(f"Total tokens: {len(tokens):,}")
+    # Get file size to calculate number of tokens
+    file_size = os.path.getsize(input_bin)
+    num_tokens = file_size // 2  # uint16 = 2 bytes
+    print(f"Total tokens: {num_tokens:,}")
     print(f"Decoding tokens to text...")
     
     # Decode tokens in chunks to avoid memory issues
     # Use a reasonable chunk size that balances memory and efficiency
     chunk_size = 1000000  # Process 1M tokens at a time
     lines_written = 0
+    tokens_processed = 0
     
-    with open(output_txt, 'w', encoding='utf-8') as f:
-        for i in range(0, len(tokens), chunk_size):
+    with open(input_bin, 'rb') as f_in, open(output_txt, 'w', encoding='utf-8') as f_out:
+        while tokens_processed < num_tokens:
             if max_lines and lines_written >= max_lines:
                 break
+            
+            # Read chunk_size tokens (each token is 2 bytes)
+            bytes_to_read = min(chunk_size * 2, file_size - f_in.tell())
+            if bytes_to_read <= 0:
+                break
                 
-            chunk = tokens[i:i+chunk_size]
+            chunk_bytes = f_in.read(bytes_to_read)
+            chunk_tokens = np.frombuffer(chunk_bytes, dtype=np.uint16)
+            
             # Decode chunk
-            text = tokenizer.decode(chunk.tolist(), skip_special_tokens=True)
+            text = tokenizer.decode(chunk_tokens.tolist(), skip_special_tokens=True)
             
             # Split by newlines if present, otherwise write as single line
             text_lines = text.split('\n')
@@ -60,11 +68,12 @@ def convert_bin_to_text(input_bin, output_txt, tokenizer_name='gpt2', max_lines=
                     break
                 line = line.strip()
                 if line:  # Only write non-empty lines
-                    f.write(line + '\n')
+                    f_out.write(line + '\n')
                     lines_written += 1
             
-            if (i // chunk_size) % 100 == 0:
-                print(f"Processed {i:,}/{len(tokens):,} tokens ({lines_written} lines)", end='\r')
+            tokens_processed += len(chunk_tokens)
+            if (tokens_processed // chunk_size) % 100 == 0 or tokens_processed >= num_tokens:
+                print(f"Processed {tokens_processed:,}/{num_tokens:,} tokens ({lines_written} lines)", end='\r')
     
     print(f"\nConversion complete! Wrote {lines_written} lines to {output_txt}")
 

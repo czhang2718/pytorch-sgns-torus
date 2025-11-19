@@ -6,6 +6,13 @@ import pickle
 import argparse
 import numpy as np
 
+try:
+    from transformers import GPT2Tokenizer
+    TOKENIZER_AVAILABLE = True
+except ImportError:
+    TOKENIZER_AVAILABLE = False
+    print("Warning: transformers not available. Install with: pip install transformers")
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -18,18 +25,30 @@ def parse_args():
     parser.add_argument('--chunk_size', type=int, default=10000000, help="chunk size for processing binary files (in tokens)")
     parser.add_argument('--max_chunks', type=int, default=None, help="maximum number of chunks to process (for testing, e.g., 90 for 1/10 of 904 chunks)")
     parser.add_argument('--vocab_chunk_size', type=int, default=50000000, help="chunk size for reading file when building vocab (in tokens)")
+    parser.add_argument('--tokenizer', type=str, default='gpt2', help="Tokenizer name for decoding token IDs (default: gpt2)")
     return parser.parse_args()
 
 
 class Preprocess(object):
 
-    def __init__(self, window=5, unk='<UNK>', data_dir='./data/'):
+    def __init__(self, window=5, unk='<UNK>', data_dir='./data/', tokenizer_name='gpt2'):
         self.window = window
         self.unk = unk
         self.data_dir = data_dir
         # Create data directory if it doesn't exist
         if not os.path.isdir(self.data_dir):
             os.makedirs(self.data_dir)
+        # Load tokenizer for decoding token IDs
+        if TOKENIZER_AVAILABLE:
+            print(f"Loading tokenizer: {tokenizer_name}")
+            self.tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_name)
+            # Create a mapping from token ID to token string
+            # We'll build this cache as we encounter tokens
+            self.token_id_to_token = {}
+        else:
+            self.tokenizer = None
+            self.token_id_to_token = {}
+            print("Warning: Tokenizer not available. Will use token ID strings instead of decoded tokens.")
 
     def skipgram(self, sentence, i):
         iword = sentence[i]
@@ -79,7 +98,22 @@ class Preprocess(object):
                 # Count frequencies in this chunk
                 unique_tokens, counts = np.unique(chunk_tokens, return_counts=True)
                 for token_id, count in zip(unique_tokens, counts):
-                    token_str = str(token_id)
+                    # Decode token ID to actual token string
+                    if self.tokenizer is not None:
+                        if token_id not in self.token_id_to_token:
+                            # Convert token ID to token string using tokenizer
+                            try:
+                                token_str = self.tokenizer.convert_ids_to_tokens([int(token_id)])[0]
+                                self.token_id_to_token[token_id] = token_str
+                            except (IndexError, KeyError):
+                                # Fallback to string representation if tokenizer fails
+                                token_str = str(token_id)
+                                self.token_id_to_token[token_id] = token_str
+                        else:
+                            token_str = self.token_id_to_token[token_id]
+                    else:
+                        token_str = str(token_id)
+                    
                     if token_str in self.wc:
                         self.wc[token_str] += int(count)
                     else:
@@ -142,10 +176,23 @@ class Preprocess(object):
                 chunk_bytes = f.read(bytes_to_read)
                 chunk_tokens = np.frombuffer(chunk_bytes, dtype=np.uint16)
                 
-                # Convert token IDs to strings and filter by vocabulary
+                # Convert token IDs to actual token strings and filter by vocabulary
                 sent = []
                 for token_id in chunk_tokens:
-                    token_str = str(token_id)
+                    # Decode token ID to actual token string
+                    if self.tokenizer is not None:
+                        if token_id not in self.token_id_to_token:
+                            try:
+                                token_str = self.tokenizer.convert_ids_to_tokens([int(token_id)])[0]
+                                self.token_id_to_token[token_id] = token_str
+                            except (IndexError, KeyError):
+                                token_str = str(token_id)
+                                self.token_id_to_token[token_id] = token_str
+                        else:
+                            token_str = self.token_id_to_token[token_id]
+                    else:
+                        token_str = str(token_id)
+                    
                     if token_str in self.vocab:
                         sent.append(token_str)
                     else:
@@ -241,7 +288,7 @@ class Preprocess(object):
 
 if __name__ == '__main__':
     args = parse_args()
-    preprocess = Preprocess(window=args.window, unk=args.unk, data_dir=args.data_dir)
+    preprocess = Preprocess(window=args.window, unk=args.unk, data_dir=args.data_dir, tokenizer_name=args.tokenizer)
     preprocess.build(args.vocab, max_vocab=args.max_vocab, vocab_chunk_size=args.vocab_chunk_size, max_chunks=args.max_chunks)
     preprocess.convert(args.corpus, chunk_size=args.chunk_size, max_chunks=args.max_chunks)
 

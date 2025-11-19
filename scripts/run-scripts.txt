@@ -1,0 +1,34 @@
+python train.py \
+--weights \
+--cuda \
+--mb 16000 \
+--lr .01 \
+--wandb \
+--wandb_name "R300-train-window-5-NO-coord-weights" \
+--save_dir './runs/R300-train-window-5-NO-coord-weights' \
+--data_dir '/cache/openwebtext/train' \
+--epoch 5
+
+
+
+python train.py \
+--weights \
+--cuda \
+--mb 16000 \
+--lr .01 \
+--wandb \
+--wandb_name "T300-train-window-5-coord-weights" \
+--save_dir './runs/T300-train-window-5-coord-weights' \
+--data_dir '/cache/openwebtext/train' \
+--epoch 5 \
+--torus
+
+
+python preprocess_binary.py \
+--data_dir /cache/openwebtext/train \
+--vocab /cache/openwebtext/train/train.bin \
+--corpus /cache/openwebtext/train/train.bin \
+--window 5 \
+--max_vocab 50304 \
+--chunk_size 10000000 \
+--max_chunks 100

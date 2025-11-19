@@ -71,11 +71,15 @@ class SGNS(nn.Module):
         self.vocab_size = vocab_size
         self.n_negs = n_negs
         self.weights = weights
-        self.h = self._batch_dot_product
+        
         if torus:
             self.h = self._sum_cosine_diff
             self.coord_weights = nn.Parameter(t.ones(self.embedding.embedding_size)/t.sqrt(t.tensor(self.embedding.embedding_size, dtype=t.float32)))
             self.coord_weights.requires_grad = True
+        else:
+            self.h = self._batch_dot_product
+            # self.coord_weights = nn.Parameter(t.ones(self.embedding.embedding_size))
+            # self.coord_weights.requires_grad = True
 
         if weights is not None:
             wf = np.power(weights, 0.75)
@@ -96,6 +100,8 @@ class SGNS(nn.Module):
         y: t.Tensor # [B, C2, E], C2=1
     ) -> t.Tensor:
         assert x.dim() == 3 and y.dim() == 3
+        # Apply coordinate weights element-wise to the embedding dimension
+        # x_weighted = x * self.coord_weights.unsqueeze(0).unsqueeze(0)  # [B, C1, E] * [1, 1, E]
         return t.bmm(x, y.transpose(1, 2))
 
 
