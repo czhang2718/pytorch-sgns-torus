@@ -23,6 +23,19 @@ python train.py \
 --epoch 5 \
 --torus
 
+python train.py \
+--weights \
+--cuda \
+--mb 16000 \
+--lr .01 \
+--wandb \
+--wandb_name "T300-test-log-oloss-nloss" \
+--save_dir './runs/T300-train-window-10-test-log' \
+--data_dir '/cache/openwebtext/train' \
+--epoch 1 \
+--torus
+
+
 
 python preprocess_binary.py \
 --data_dir /cache/openwebtext/train \
@@ -32,3 +45,73 @@ python preprocess_binary.py \
 --max_vocab 50304 \
 --chunk_size 10000000 \
 --max_chunks 100
+
+
+python train.py \
+--weights \
+--cuda \
+--mb 16000 \
+--lr .01 \
+--wandb \
+--wandb_name "R300-train10chunks-window-5-init.5" \
+--save_dir './runs/R300-train10chunks-window-5-init.5' \
+--data_dir '/cache/openwebtext/train-10-chunks' \
+--epoch 5
+
+
+
+python train.py \
+--weights \
+--cuda \
+--mb 16000 \
+--lr .01 \
+--wandb \
+--wandb_name "T300-train-window-5-coord-weights-sin" \
+--save_dir './runs/T300-train-window-5-coord-weights-sin' \
+--data_dir '/cache/openwebtext/train' \
+--epoch 5 \
+--torus
+
+
+
+python train.py \
+--weights \
+--cuda \
+--mb 32000 \
+--lr .01 \
+--wandb \
+--wandb_name "T512-train-window-10-coord-weights" \
+--save_dir './runs/T512-train-window-10-coord-weights' \
+--data_dir '/cache/openwebtext/train' \
+--epoch 1 \
+--torus \
+--e_dim 512
+
+
+
+python plot.py \
+--data_dir /cache/openwebtext/train \
+--result_dir runs/T300-train-window-10-coord-weights \
+--model "pca" \
+--top_k 100
+
+python plot.py \
+--data_dir /cache/openwebtext/train \
+--result_dir runs/T300-train-window-10-coord-weights \
+--model "pca" \
+--top_k 100 \
+--word_range_start 1000 \
+--word_range_end 1100
+
+
+python train.py \
+--weights \
+--cuda \
+--mb 32000 \
+--lr .01 \
+--wandb \
+--wandb_name "R512-train-window-10" \
+--save_dir './runs/R512-train-window-10' \
+--data_dir '/cache/openwebtext/train' \
+--epoch 1 \
+--e_dim 512

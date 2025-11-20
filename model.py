@@ -36,6 +36,8 @@ class Word2Vec(Bundler):
         self.ovectors = nn.Embedding(self.vocab_size, self.embedding_size, padding_idx=padding_idx)
         init_min = -0.5 / self.embedding_size if not torus else -1
         init_max = 0.5 / self.embedding_size if not torus else 1
+        # init_min = -0.5 if not torus else -1
+        # init_max = 0.5 if not torus else 1
         self.ivectors.weight = nn.Parameter(t.cat([t.zeros(1, self.embedding_size), FT(self.vocab_size - 1, self.embedding_size).uniform_(init_min, init_max)]))
         self.ovectors.weight = nn.Parameter(t.cat([t.zeros(1, self.embedding_size), FT(self.vocab_size - 1, self.embedding_size).uniform_(init_min, init_max)]))
         self.ivectors.weight.requires_grad = True
@@ -100,8 +102,7 @@ class SGNS(nn.Module):
         y: t.Tensor # [B, C2, E], C2=1
     ) -> t.Tensor:
         assert x.dim() == 3 and y.dim() == 3
-        # Apply coordinate weights element-wise to the embedding dimension
-        # x_weighted = x * self.coord_weights.unsqueeze(0).unsqueeze(0)  # [B, C1, E] * [1, 1, E]
+        # x = x * self.coord_weights.unsqueeze(0).unsqueeze(0)  # [B, C1, E] * [1, 1, E]
         return t.bmm(x, y.transpose(1, 2))
 
 
@@ -126,4 +127,4 @@ class SGNS(nn.Module):
         nloss = F.logsigmoid(-n_inner_product.squeeze()).view(-1, context_size, self.n_negs).sum(2).mean(1)
 
         # print("oloss", oloss, "nloss", nloss)
-        return -(oloss + nloss).mean()
+        return oloss.mean(), nloss.mean()

@@ -40,6 +40,8 @@ def parse_args():
     parser.add_argument('--wandb_project', type=str, default='pytorch-sgns-torus', help="wandb project name")
     parser.add_argument('--wandb_entity', type=str, default=None, help="wandb entity/team name")
     parser.add_argument('--wandb_log_interval', type=int, default=1, help="log to wandb every N batches")
+    parser.add_argument('--seed', type=int, default=42, help="random seed for reproducibility")
+    parser.add_argument('--save_embeddings_limit', type=int, default=1000, help="limit number of embeddings saved to text file (0 = save all)")
     return parser.parse_args()
 
 
@@ -63,7 +65,22 @@ class PermutedSubsampledCorpus(Dataset):
         return iword, np.array(owords)
 
 
+def set_seed(seed):
+    """Set random seed for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    t.manual_seed(seed)
+    t.cuda.manual_seed_all(seed)
+    # For reproducibility, but may slow down training
+    t.backends.cudnn.deterministic = True
+    t.backends.cudnn.benchmark = False
+
+
 def train(args):
+    # Set random seed for reproducibility
+    set_seed(args.seed)
+    print(f"Random seed set to: {args.seed}")
+    
     idx2word = pickle.load(open(os.path.join(args.data_dir, 'idx2word.dat'), 'rb'))
     wc = pickle.load(open(os.path.join(args.data_dir, 'wc.dat'), 'rb'))
     wf = np.array([wc[word] for word in idx2word])
@@ -99,6 +116,7 @@ def train(args):
             'use_weights': args.weights,
             'torus': args.torus,
             'cuda': args.cuda,
+            'seed': args.seed,
         }
         if args.torus and hasattr(sgns, 'torus_scale_factor'):
             config['torus_scale_factor'] = sgns.torus_scale_factor.item()
@@ -110,29 +128,34 @@ def train(args):
         )
     
     best_loss = float('inf')
-    tokens_seen = 0
+    words_seen = 0
     
     for epoch in range(1, args.epoch + 1):
         dataset = PermutedSubsampledCorpus(os.path.join(args.data_dir, 'train.dat'))
         dataloader = DataLoader(dataset, batch_size=args.mb, shuffle=True)
         
         epoch_losses = []
+        epoch_olosses = []
+        epoch_nlosses = []
         pbar = tqdm(dataloader)
         pbar.set_description("[Epoch {}]".format(epoch))
         
         for batch_idx, (iword, owords) in enumerate(pbar, 1):
-            loss = sgns(iword, owords)
+            oloss, nloss = sgns(iword, owords)
+            loss = -(oloss + nloss).mean()
             optim.zero_grad()
             loss.backward()
             optim.step()
             
             loss_val = loss.item()
-            epoch_losses.append(loss_val)
-            
+            epoch_olosses.append(oloss.item())
+            epoch_nlosses.append(nloss.item())
+            epoch_losses.append(loss.item())
+                        
             # Count tokens: batch_size * context_size
             batch_size = iword.size(0)
             context_size = owords.size(1)
-            tokens_seen += batch_size * context_size
+            words_seen += batch_size * context_size
             
             # Check for NaN or Inf (bug detection)
             if not np.isfinite(loss_val):
@@ -145,10 +168,17 @@ def train(args):
             
             # Log to wandb at specified intervals
             if args.wandb and WANDB_AVAILABLE and (batch_idx % args.wandb_log_interval == 0):
-                log_dict = {'loss': loss_val, 'epoch': epoch}
+                log_dict = {
+                    'loss': loss_val, 
+                    'epoch': epoch,
+                    'avg_ologprob': np.mean(epoch_olosses),
+                    'avg_nlogprob': np.mean(epoch_nlosses),
+                }
                 if args.torus and hasattr(sgns, 'torus_scale_factor'):
                     log_dict['torus_scale_factor'] = sgns.torus_scale_factor.item()
-                wandb.log(log_dict, step=tokens_seen)
+                if hasattr(sgns, 'coord_weights'):
+                    log_dict['avg_coord_weights'] = sgns.coord_weights.mean().item()
+                wandb.log(log_dict, step=words_seen)
         
         # Log at end of epoch
         epoch_avg_loss = np.mean(epoch_losses)
@@ -158,12 +188,31 @@ def train(args):
         
         # Log epoch average to wandb
         if args.wandb and WANDB_AVAILABLE:
-            log_dict = {'loss': epoch_avg_loss, 'epoch': epoch}
+            log_dict = {
+                'loss': epoch_avg_loss, 
+                'epoch': epoch,
+                'avg_ologprob': np.mean(epoch_olosses),
+                'avg_nlogprob': np.mean(epoch_nlosses),
+            }
             if args.torus and hasattr(sgns, 'torus_scale_factor'):
                 log_dict['torus_scale_factor'] = sgns.torus_scale_factor.item()
-            wandb.log(log_dict, step=tokens_seen)
+            if hasattr(sgns, 'coord_weights'):
+                log_dict['avg_coord_weights'] = sgns.coord_weights.mean().item()
+            wandb.log(log_dict, step=words_seen)
     idx2vec = model.ivectors.weight.data.cpu().numpy()
     pickle.dump(idx2vec, open(os.path.join(args.save_dir, 'idx2vec.dat'), 'wb'))
+    
+    # Save embeddings in readable text format: word -> embedding vector
+    embeddings_txt_path = os.path.join(args.save_dir, 'embeddings.txt')
+    limit = args.save_embeddings_limit if args.save_embeddings_limit > 0 else len(idx2word)
+    num_to_save = min(limit, len(idx2word))
+    with open(embeddings_txt_path, 'w') as f:
+        for idx in range(num_to_save):
+            word = idx2word[idx]
+            vec_str = ' '.join([str(x) for x in idx2vec[idx]])
+            f.write(f"{word} {vec_str}\n")
+    print(f"Saved {num_to_save} embeddings to {embeddings_txt_path}")
+    
     t.save(sgns.state_dict(), os.path.join(args.save_dir, '{}.pt'.format(args.name)))
     t.save(optim.state_dict(), os.path.join(args.save_dir, '{}.optim.pt'.format(args.name)))
     

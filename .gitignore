@@ -111,4 +111,5 @@ result/
 # Claire: saved data
 ./data
 ./pts
-./wandb
+wandb
+runs
