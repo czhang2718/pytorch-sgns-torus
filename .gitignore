@@ -109,7 +109,7 @@ result/
 
 
 # Claire: saved data
-./data
-./pts
-wandb
-runs
+data/
+pts/
+wandb/
+runs/
