@@ -19,13 +19,17 @@ def parse_args():
     parser.add_argument('--top_k', type=int, default=1000, help="scatter top-k words")
     parser.add_argument('--word_range_start', type=int, default=None, help="start of word rank range (1-indexed)")
     parser.add_argument('--word_range_end', type=int, default=None, help="end of word rank range (1-indexed)")
+    parser.add_argument('--plot_name', type=str, default=None, help="custom name for the output plot file (without .png extension)")
     return parser.parse_args()
 
 
 def plot(args):
+    print("Loading word counts...")
     wc = pickle.load(open(os.path.join(args.data_dir, 'wc.dat'), 'rb'))
+    print(f"Loaded {len(wc)} words from vocabulary")
     
     # Get words by frequency range or top K
+    print("Selecting words...")
     if args.word_range_start is not None and args.word_range_end is not None:
         sorted_words = sorted(wc, key=wc.get, reverse=True)
         # Extract the range (1-indexed, so subtract 1 for 0-indexed)
@@ -36,16 +40,30 @@ def plot(args):
         range_label = f"top {len(words)}"
     
     num_words = len(words)
+    print(f"Selected {num_words} words ({range_label})")
+    
+    print("Loading embeddings...")
+    word2idx = pickle.load(open(os.path.join(args.data_dir, 'word2idx.dat'), 'rb'))
+    idx2vec = pickle.load(open(os.path.join(args.result_dir, 'idx2vec.dat'), 'rb'))
+    print("Extracting embeddings for selected words...")
+    X = np.array([idx2vec[word2idx[word]] for word in words])
+    print(f"Loaded embeddings: shape {X.shape}")
+    
+    print(f"Initializing {args.model.upper()} model...")
     if args.model == 'pca':
         model = PCA(n_components=2)
     elif args.model == 'tsne':
         # Use 'barnes_hut' method for faster computation, or remove method parameter for auto-selection
         # Perplexity should be less than the number of samples
-        model = TSNE(n_components=2, perplexity=min(30, num_words - 1), init='pca')
-    word2idx = pickle.load(open(os.path.join(args.data_dir, 'word2idx.dat'), 'rb'))
-    idx2vec = pickle.load(open(os.path.join(args.result_dir, 'idx2vec.dat'), 'rb'))
-    X = np.array([idx2vec[word2idx[word]] for word in words])
+        perplexity = min(30, num_words - 1)
+        print(f"  Using perplexity={perplexity}")
+        model = TSNE(n_components=2, perplexity=perplexity, init='pca')
+    
+    print(f"Running {args.model.upper()} (this may take a while)...")
     X = model.fit_transform(X)
+    print(f"{args.model.upper()} completed! Reduced to shape {X.shape}")
+    
+    print("Creating plot...")
     plt.figure(figsize=(18, 18))
     for i in range(len(X)):
         plt.text(X[i, 0], X[i, 1], words[i], bbox=dict(facecolor='blue', alpha=0.1))
@@ -57,13 +75,17 @@ def plot(args):
     plt.title(title_text)
     
     # Determine output filename
-    if args.word_range_start is not None and args.word_range_end is not None:
+    if args.plot_name is not None:
+        output_filename = args.plot_name if args.plot_name.endswith('.png') else f"{args.plot_name}.png"
+    elif args.word_range_start is not None and args.word_range_end is not None:
         output_filename = f"{args.model}_rank{args.word_range_start}_{args.word_range_end}.png"
     else:
         output_filename = f"{args.model}.png"
     
+    print(f"Saving figure...")
     plt.savefig(os.path.join(args.result_dir, output_filename))
-    print(f"saved figure to {os.path.join(args.result_dir, output_filename)}")
+    print(f"Saved figure to {os.path.join(args.result_dir, output_filename)}")
+    print("Done!")
 
 
 if __name__ == '__main__':

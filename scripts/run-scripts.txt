@@ -115,3 +115,87 @@ python train.py \
 --data_dir '/cache/openwebtext/train' \
 --epoch 1 \
 --e_dim 512
+
+
+python plot.py \
+--data_dir /cache/openwebtext/train \
+--result_dir runs/R512-train-window-10 \
+--model "pca" \
+--top_k 500 
+
+python plot.py \
+--data_dir /cache/openwebtext/train \
+--result_dir runs/R512-train-window-10 \
+--model "tsne" \
+--top_k 500 
+
+
+python plot.py \
+--data_dir /cache/openwebtext/train \
+--result_dir runs/T512-train-window-10-coord-weights \
+--model "pca" \
+--top_k 300 
+
+
+python plot.py \
+--data_dir /cache/openwebtext/train \
+--result_dir runs/T512-train-window-10-coord-weights \
+--model "tsne" \
+--top_k 300 
+
+
+
+python scripts/extract_embeddings.py \
+--data_dir /cache/openwebtext/train \
+--result_dir runs/T512-train-window-10-coord-weights \
+--output runs/T512-train-window-10-coord-weights/embeddings.txt \
+--limit 1000
+
+
+python plot_torus.py \
+--data_dir /cache/openwebtext/train \
+--result_dir runs/T512-train-window-10-coord-weights \
+--model "tsne" \
+--top_k 300 \
+--plot_name "tsne-T512-top300"
+
+
+
+python plot.py \
+--data_dir /cache/openwebtext/train \
+--result_dir runs/R512-train-window-10 \
+--model "tsne" \
+--top_k 300 \
+--plot_name "tsne-R512-top300"
+
+
+python plot_torus.py \
+  --data_dir /cache/openwebtext/train \
+  --result_dir runs/T512-train-window-10-coord-weights \
+  --model_path runs/T512-train-window-10-coord-weights/sgns.pt \
+  --e_dim 512 \
+  --model tsne \
+  --top_k 500 \
+  --plot_name "fixed T512 tsne"
+
+
+# Run t-SNE on 5000 words but only plot the top 1000
+python plot_torus.py \
+  --data_dir /cache/openwebtext/train \
+  --result_dir runs/T512-train-window-10-coord-weights \
+  --model_path runs/T512-train-window-10-coord-weights/sgns.pt \
+  --e_dim 512 \
+  --model tsne \
+  --num_alg_points 700 \
+  --num_plot_points 700 \
+  --perplexity 30
+
+
+python plot_torus.py \
+  --data_dir /cache/openwebtext/train \
+  --result_dir runs/T512-train-window-10-coord-weights \
+  --model_path runs/T512-train-window-10-coord-weights/sgns.pt \
+  --e_dim 512 \
+  --model pca \
+  --num_alg_points 500 \
+  --num_plot_points 500
