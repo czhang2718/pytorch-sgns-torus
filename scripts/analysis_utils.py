@@ -99,6 +99,13 @@ class EmbeddingAnalysis(ABC):
         sim = sorted(sim, reverse=True)
         return sim[:n]
 
+    # def get_T_closest_words(
+    #     self,
+    #     word: int | str | t.Tensor,
+    #     n=10,
+    # ):
+    #     """Find n closest words using toric distance: sum_i 
+
 
 class ToricEmbeddingAnalysis(EmbeddingAnalysis):
     """Analysis for toric (circular) embeddings using weighted cosine distance."""
@@ -237,6 +244,22 @@ class RealEmbeddingAnalysis(EmbeddingAnalysis):
         word2: int | str | t.Tensor,
     ) -> t.Tensor:
         """
+        Real similarity: cosine similarity of ivec and ovec.
+        """
+        # print("cosine")
+        ivec = self._resolve_ivec(word1)
+        ovec = self._resolve_ovec(word2)
+        # Cosine similarity: (a · b) / (||a|| * ||b||)
+        dot_product = t.dot(ivec, ovec)
+        norm_product = t.norm(ivec) * t.norm(ovec)
+        return dot_product / norm_product.clamp(min=1e-8)
+
+    def h(
+        self,
+        word1: int | str | t.Tensor,
+        word2: int | str | t.Tensor,
+    ) -> t.Tensor:
+        """
         Real similarity: dot product of ivec and ovec.
         """
         ivec = self._resolve_ivec(word1)
@@ -249,7 +272,7 @@ class RealEmbeddingAnalysis(EmbeddingAnalysis):
         word2: list[int | str | t.Tensor],
     ) -> t.Tensor:
         """
-        Batch real similarity: dot product for each pair.
+        Batch real similarity: cosine similarity for each pair.
         """
         if isinstance(word1[0], str):
             word1 = [self.words.index(word) for word in word1]
@@ -257,4 +280,7 @@ class RealEmbeddingAnalysis(EmbeddingAnalysis):
             word2 = [self.words.index(word) for word in word2]
         ivecs = t.stack([self.idx2ivec[word] for word in word1])
         ovecs = t.stack([self.idx2ovec[word] for word in word2])
-        return (ivecs * ovecs).sum(dim=-1)
+        # Cosine similarity: (a · b) / (||a|| * ||b||)
+        dot_products = (ivecs * ovecs).sum(dim=-1)
+        norms = t.norm(ivecs, dim=-1) * t.norm(ovecs, dim=-1)
+        return dot_products / norms.clamp(min=1e-8)
