@@ -80,8 +80,8 @@ python train.py \
 --mb 32000 \
 --lr .01 \
 --wandb \
---wandb_name "T512-train-window-10-coord-weights" \
---save_dir './runs/T512-train-window-10-coord-weights' \
+--wandb_name "T512-train-window-10-coord-weights-saveall" \
+--save_dir './runs/T512-train-window-10-coord-weights-saveall' \
 --data_dir '/cache/openwebtext/train' \
 --epoch 1 \
 --torus \
@@ -199,3 +199,16 @@ python plot_torus.py \
   --model pca \
   --num_alg_points 500 \
   --num_plot_points 500
+
+
+python train.py \
+--weights \
+--cuda \
+--mb 32000 \
+--lr .01 \
+--wandb \
+--wandb_name "R512-train-window-10-saveall" \
+--save_dir './runs/R512-train-window-10-saveall' \
+--data_dir '/cache/openwebtext/train' \
+--epoch 1 \
+--e_dim 512

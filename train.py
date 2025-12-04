@@ -199,19 +199,32 @@ def train(args):
             if hasattr(sgns, 'coord_weights'):
                 log_dict['avg_coord_weights'] = sgns.coord_weights.mean().item()
             wandb.log(log_dict, step=words_seen)
-    idx2vec = model.ivectors.weight.data.cpu().numpy()
-    pickle.dump(idx2vec, open(os.path.join(args.save_dir, 'idx2vec.dat'), 'wb'))
+    idx2ivec = model.ivectors.weight.data.cpu().numpy()
+    idx2ovec = model.ovectors.weight.data.cpu().numpy()
+    pickle.dump(idx2ivec, open(os.path.join(args.save_dir, 'idx2ivec.dat'), 'wb'))
+    pickle.dump(idx2ovec, open(os.path.join(args.save_dir, 'idx2ovec.dat'), 'wb'))
     
     # Save embeddings in readable text format: word -> embedding vector
-    embeddings_txt_path = os.path.join(args.save_dir, 'embeddings.txt')
     limit = args.save_embeddings_limit if args.save_embeddings_limit > 0 else len(idx2word)
     num_to_save = min(limit, len(idx2word))
-    with open(embeddings_txt_path, 'w') as f:
+    
+    # Save input vectors (ivectors)
+    ivec_txt_path = os.path.join(args.save_dir, 'embeddings_ivec.txt')
+    with open(ivec_txt_path, 'w') as f:
         for idx in range(num_to_save):
             word = idx2word[idx]
-            vec_str = ' '.join([str(x) for x in idx2vec[idx]])
+            vec_str = ' '.join([str(x) for x in idx2ivec[idx]])
             f.write(f"{word} {vec_str}\n")
-    print(f"Saved {num_to_save} embeddings to {embeddings_txt_path}")
+    print(f"Saved {num_to_save} input vector embeddings to {ivec_txt_path}")
+    
+    # Save output vectors (ovectors)
+    ovec_txt_path = os.path.join(args.save_dir, 'embeddings_ovec.txt')
+    with open(ovec_txt_path, 'w') as f:
+        for idx in range(num_to_save):
+            word = idx2word[idx]
+            vec_str = ' '.join([str(x) for x in idx2ovec[idx]])
+            f.write(f"{word} {vec_str}\n")
+    print(f"Saved {num_to_save} output vector embeddings to {ovec_txt_path}")
     
     t.save(sgns.state_dict(), os.path.join(args.save_dir, '{}.pt'.format(args.name)))
     t.save(optim.state_dict(), os.path.join(args.save_dir, '{}.optim.pt'.format(args.name)))
