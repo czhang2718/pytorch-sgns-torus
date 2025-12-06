@@ -133,25 +133,25 @@ class ToricEmbeddingAnalysis(EmbeddingAnalysis):
         print(f"  Coord weights available: {self.coord_weights is not None}")
         print(f"  Using device: {self.device}")
 
-    def similarity(
+    def h(
         self,
         word1: int | str | t.Tensor,
         word2: int | str | t.Tensor,
     ) -> t.Tensor:
         """
-        Toric similarity: sum(coord_weights * cos(π * (ivec - ovec)))
+        Toric similarity function h: sum(coord_weights * cos(π * (ivec - ovec)))
         """
         ivec = self._resolve_ivec(word1)
         ovec = self._resolve_ovec(word2)
         return (self.coord_weights * t.cos(t.pi * (ivec - ovec))).sum(dim=-1)
 
-    def batch_similarity(
+    def batch_h(
         self,
         word1: list[int | str | t.Tensor],
         word2: list[int | str | t.Tensor],
     ) -> t.Tensor:
         """
-        Batch toric similarity: sum(coord_weights * cos(π * (ivec[word1] - ovec[word2])))
+        Batch toric similarity h: sum(coord_weights * cos(π * (ivec[word1] - ovec[word2])))
         """
         if isinstance(word1[0], str):
             word1 = [self.words.index(word) for word in word1]
@@ -160,6 +160,71 @@ class ToricEmbeddingAnalysis(EmbeddingAnalysis):
         ivecs = t.stack([self.idx2ivec[word] for word in word1])
         ovecs = t.stack([self.idx2ovec[word] for word in word2])
         return (self.coord_weights * t.cos(t.pi * (ivecs - ovecs))).sum(dim=-1)
+
+    def similarity(
+        self,
+        word1: int | str | t.Tensor,
+        word2: int | str | t.Tensor,
+    ) -> t.Tensor:
+        """
+        Geodesic/torus distance: weighted sum of geodesic distances on each S^1 circle.
+        For angles in [-1, 1] (representing [-π, π]), geodesic distance is min(|θ1-θ2|, 2-|θ1-θ2|).
+        """
+        ivec = self._resolve_ivec(word1)
+        ovec = self._resolve_ovec(word2)
+        # Normalize to [-1, 1] (toric wraparound)
+        ivec = (ivec + 1) % 2 - 1
+        ovec = (ovec + 1) % 2 - 1
+        # Geodesic distance on each S^1: min(|diff|, 2 - |diff|)
+        diff = t.abs(ivec - ovec)
+        geodesic_dist = t.minimum(diff, 2 - diff)
+        # Weighted sum with coord_weights
+        return (self.coord_weights * geodesic_dist).sum(dim=-1)
+
+    def batch_similarity(
+        self,
+        word1: list[int | str | t.Tensor],
+        word2: list[int | str | t.Tensor],
+    ) -> t.Tensor:
+        """
+        Batch geodesic/torus distance: weighted sum of geodesic distances on each S^1 circle.
+        """
+        if isinstance(word1[0], str):
+            word1 = [self.words.index(word) for word in word1]
+        if isinstance(word2[0], str):
+            word2 = [self.words.index(word) for word in word2]
+        ivecs = t.stack([self.idx2ivec[word] for word in word1])
+        ovecs = t.stack([self.idx2ovec[word] for word in word2])
+        # Normalize to [-1, 1] (toric wraparound)
+        ivecs = (ivecs + 1) % 2 - 1
+        ovecs = (ovecs + 1) % 2 - 1
+        # Geodesic distance on each S^1: min(|diff|, 2 - |diff|)
+        diff = t.abs(ivecs - ovecs)
+        geodesic_dist = t.minimum(diff, 2 - diff)
+        # Weighted sum with coord_weights
+        return (self.coord_weights * geodesic_dist).sum(dim=-1)
+
+    def get_closest_words(
+        self,
+        word: int | str | t.Tensor,
+        closest_ovec=True,
+        n=10,
+    ):
+        """Find n closest words using the h similarity function (not geodesic distance)."""
+        if isinstance(word, int):
+            word = self.idx2ivec[word] if closest_ovec else self.idx2ovec[word]
+        elif isinstance(word, str):
+            word = self.word2ivec[word] if closest_ovec else self.word2ovec[word]
+            
+        sim = []
+        for idx in range(self.vocab_size):
+            if closest_ovec:
+                h_val = self.h(word, idx).item()
+            else:
+                h_val = self.h(idx, word).item()
+            sim.append((h_val, self.words[idx]))
+        sim = sorted(sim, reverse=True)
+        return sim[:n]
 
     def project_T_to_R(
         self,

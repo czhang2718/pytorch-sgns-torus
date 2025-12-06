@@ -212,3 +212,30 @@ python train.py \
 --data_dir '/cache/openwebtext/train' \
 --epoch 1 \
 --e_dim 512
+
+
+python train.py \
+--weights \
+--cuda \
+--mb 32000 \
+--lr .005 \
+--wandb \
+--wandb_name "T300-train-window-10-coord-weights" \
+--save_dir './runs/T300-train-window-10-coord-weights' \
+--data_dir '/cache/openwebtext/train' \
+--epoch 2 \
+--torus \
+--e_dim 300
+
+
+python train.py \
+--weights \
+--cuda \
+--mb 32000 \
+--lr .005 \
+--wandb \
+--wandb_name "R300-train-window-10" \
+--save_dir './runs/R300-train-window-10' \
+--data_dir '/cache/openwebtext/train' \
+--epoch 2 \
+--e_dim 300
